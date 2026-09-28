@@ -44,8 +44,8 @@ Contract 3: Predictions file (one per training run)
   attn.npy with shape (N, 30, 14), rows in the same order as the CSV
 
 Also agree in hour 1:
-  - Framework. Proposed: PyTorch.
-  - Repo layout and one branch per member.
+  - Framework: PyTorch.
+  - Repo layout and one branch per member (see README.md).
   - One shared config file holding: window = 30, RUL cap = 125,
     health exponent = 0.7, stage thresholds (100 and 30), the 14
     sensor names. Nobody hardcodes these anywhere else.

@@ -1,0 +1,21 @@
+# Raw data, arrays and model outputs stay out of git
+data/raw/
+artifacts/
+*.npy
+*.npz
+*.pt
+*.pth
+*.ckpt
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+venv/
+.venv/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store

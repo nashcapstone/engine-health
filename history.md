@@ -144,3 +144,24 @@ New entries go at the bottom. Do not edit or delete someone else's entry.
 - No shared files changed.
 
 **Commits:** d14243b
+
+## 2026-09-29 | Member C | evaluation
+
+**Changed**
+- `evaluation/attention.py`: `attention_by_stage` (mean attention per sensor in each health stage), `attention_over_time`, `top_sensors`, `stage_shift` (CRITICAL minus HEALTHY per sensor), and heatmaps: one window, by stage, across the window, and over one engine's life. Built and tested on `fake_predictions()`.
+- `evaluation/metrics.py`: `errors_by_stage`, which gives n, RMSE, MAE and bias per true stage.
+- `evaluation/plots.py`: `plot_error_by_rul`, which plots bias and RMSE in 10-cycle bins of actual RUL.
+- `evaluation/report.py`: adds the error breakdown and `error_by_rul.png`. When a run has `attn.npy`, it also writes the attention plots, `val_attn.npy` and the top sensors per stage. It also accepts a folder path, so `python fakes.py && python -m evaluation.report artifacts/fake --no-val` works.
+- `tests/test_evaluation.py`: 6 more tests. The whole suite is 47 passed.
+
+**Others need to know**
+- Evaluation of the two real models (day 4 task). RUL error by true stage on the validation split, CNN+LSTM (CNN is similar):
+  - HEALTHY: RMSE 12.5, bias -7.5 (predicts too low; true RUL is capped flat at 125).
+  - WARNING: RMSE 16.5, bias +7.1 (predicts too late, which the NASA score punishes most).
+  - CRITICAL: RMSE 3.7, bias +0.5.
+- WARNING is the weak spot for both RUL and stage. The worst bins are true RUL 60 to 100, with RMSE about 19 and bias about +12. Stage recall on WARNING is about 0.55 to 0.60, against 0.97 or more for the other two stages.
+- CNN vs CNN+LSTM: CNN+LSTM is slightly better on the 100-row test split (RMSE 12.70 vs 13.45, NASA 303 vs 334), but the two are level on the 3,661-row validation split (13.34 vs 13.30). Treat them as equal for now. Validation was also used to choose `best.pt`, so validation numbers are slightly optimistic.
+- Member B: the attention code expects `attn.npy` exactly as described in contract 3, with weights that sum to 1 across sensors. If the weights are multiplied by 14 inside the model, keep the file as the weights that sum to 1. Nothing else is needed from you yet.
+- No shared files changed.
+
+**Commits:** 99af80b

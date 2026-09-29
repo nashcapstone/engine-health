@@ -6,9 +6,10 @@ import numpy as np
 import pytest
 
 import config
-from evaluation import plots
+from evaluation import attention, plots
 from evaluation.metrics import (
     confusion_matrix,
+    errors_by_stage,
     head_agreement,
     mae,
     nasa_score,
@@ -89,6 +90,7 @@ def test_plots_draw_on_fake_predictions(tmp_path):
     figs = [
         plots.plot_rul_scatter(df),
         plots.plot_rul_error_hist(df),
+        plots.plot_error_by_rul(df),
         plots.plot_confusion(df),
         plots.plot_health_over_life(df, eid),
         plots.plot_rul_over_life(df, eid),
@@ -114,11 +116,82 @@ def test_evaluate_run_on_a_fake_run_folder(tmp_path):
 
     metrics = evaluate_run(str(tmp_path), with_val=False)
     out = tmp_path / "eval"
-    for name in ("metrics.json", "rul_scatter.png", "rul_error.png", "confusion.png"):
+    expected = ("metrics.json", "rul_scatter.png", "rul_error.png", "confusion.png", "error_by_rul.png",
+                "attn_by_stage.png", "attn_over_time.png")
+    for name in expected:
         assert (out / name).exists(), f"{name} was not written"
+    assert set(metrics["test"]["top_sensors"]) == set(config.STAGE_NAMES)
     with open(out / "metrics.json") as f:
         assert json.load(f)["test"]["rul_rmse"] == pytest.approx(metrics["test"]["rul_rmse"])
 
     table = comparison_table({"fake": metrics})
     assert list(table.index) == ["fake"]
     assert table.loc["fake", "rul_rmse"] == pytest.approx(metrics["test"]["rul_rmse"])
+    assert len(comparison_table({"fake": metrics}, split="val")) == 0
+
+
+def test_errors_by_stage_by_hand():
+    df, _ = fake_predictions()
+    df = df.iloc[:4].copy()
+    df["stage_true"] = [0, 0, 2, 2]
+    df["rul_true"] = [110.0, 120.0, 10.0, 20.0]
+    df["rul_pred"] = [100.0, 120.0, 16.0, 22.0]  # errors -10, 0, +6, +2
+    table = errors_by_stage(df)
+    assert table.loc["HEALTHY", "n"] == 2
+    assert table.loc["HEALTHY", "bias"] == pytest.approx(-5.0)
+    assert table.loc["CRITICAL", "mae"] == pytest.approx(4.0)
+    assert table.loc["CRITICAL", "rmse"] == pytest.approx(math.sqrt((36 + 4) / 2))
+    assert table.loc["WARNING", "n"] == 0 and np.isnan(table.loc["WARNING", "rmse"])
+
+
+def test_attention_by_stage_by_hand():
+    df, _ = fake_predictions()
+    df = df.iloc[:2].copy()
+    df["stage_true"] = [0, 2]
+    attn = np.full((2, config.WINDOW, config.N_SENSORS), 0.0, dtype=np.float32)
+    attn[0, :, 0] = 1.0  # HEALTHY row looks only at the first sensor
+    attn[1, :, -1] = 1.0  # CRITICAL row looks only at the last sensor
+    by_stage = attention.attention_by_stage(df, attn)
+    first, last = config.SENSORS[0], config.SENSORS[-1]
+    assert by_stage.loc["HEALTHY", first] == 1.0
+    assert by_stage.loc["CRITICAL", last] == 1.0
+    assert by_stage.loc["WARNING"].isna().all()
+    assert attention.top_sensors(by_stage, k=1)["CRITICAL"] == [last]
+    shift = attention.stage_shift(by_stage)
+    assert shift.index[0] == last and shift.iloc[0] == 1.0
+
+
+def test_attention_by_stage_rows_sum_to_one():
+    df, attn = fake_predictions()
+    by_stage = attention.attention_by_stage(df, attn)
+    assert np.allclose(by_stage.sum(axis=1), 1.0, atol=1e-4)
+    assert attention.attention_over_time(attn).shape == (config.WINDOW, config.N_SENSORS)
+
+
+def test_attention_finds_the_fake_focus_sensors():
+    # fake attention boosts 3 sensors per stage; they should be each stage's top 3
+    df, attn = fake_predictions()
+    by_stage = attention.attention_by_stage(df, attn)
+    for stage, sensors in attention.top_sensors(by_stage, k=3).items():
+        assert all(by_stage.loc[stage, s] > 2 * attention.UNIFORM for s in sensors)
+
+
+def test_attention_plots_draw(tmp_path):
+    df, attn = fake_predictions()
+    eid = int(df["engine_id"].iloc[0])
+    figs = [
+        attention.plot_window_attention(attn[0]),
+        attention.plot_attention_by_stage(df, attn),
+        attention.plot_attention_over_time(attn),
+        attention.plot_attention_over_life(df, attn, eid),
+    ]
+    for i, fig in enumerate(figs):
+        path = tmp_path / f"{i}.png"
+        fig.savefig(path)
+        assert path.stat().st_size > 0
+
+
+def test_attention_rejects_mismatched_rows():
+    df, attn = fake_predictions()
+    with pytest.raises(AssertionError, match="attn has shape"):
+        attention.attention_by_stage(df, attn[:-1])

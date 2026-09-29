@@ -64,6 +64,35 @@ def plot_rul_error_hist(df, ax=None, bins=30, title="RUL error (predicted - actu
     return fig
 
 
+def plot_error_by_rul(df, bin_width=10, ax=None, title="RUL error by actual RUL"):
+    """Mean error (bias) and RMSE in bins of actual RUL, with the stage regions shaded."""
+    fig, ax = _axes(ax, figsize=(8, 4))
+    rul_true = df["rul_true"].to_numpy()
+    err = df["rul_pred"].to_numpy() - rul_true
+    edges = np.arange(0, config.RUL_CAP + bin_width, bin_width)
+    idx = np.clip(np.digitize(rul_true, edges) - 1, 0, len(edges) - 2)
+    centers, bias, rmse = [], [], []
+    for b in np.unique(idx):
+        e = err[idx == b]
+        centers.append(edges[b] + bin_width / 2)
+        bias.append(e.mean())
+        rmse.append(np.sqrt((e**2).mean()))
+    for (lo, hi), color in zip(
+        ((config.HEALTHY_ABOVE, config.RUL_CAP), (config.CRITICAL_BELOW, config.HEALTHY_ABOVE), (0, config.CRITICAL_BELOW)),
+        STAGE_COLORS,
+    ):
+        ax.axvspan(lo, hi, color=color, alpha=0.08, zorder=0)
+    ax.bar(centers, bias, width=bin_width * 0.8, color="#546e7a", alpha=0.8, label="Mean error (bias)")
+    ax.plot(centers, rmse, color="#c62828", marker="o", ms=4, label="RMSE")
+    ax.axhline(0, color="black", lw=1)
+    ax.set_xlim(0, config.RUL_CAP)
+    ax.set_xlabel("Actual RUL (cycles)")
+    ax.set_ylabel("Cycles   (bias > 0 is late)")
+    ax.set_title(title)
+    ax.legend(loc="upper left", fontsize=8)
+    return fig
+
+
 def plot_health_over_life(df, engine_id, ax=None, title=None):
     """True and predicted health score across one engine's windows.
 

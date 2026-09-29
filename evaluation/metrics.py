@@ -5,6 +5,7 @@ a numpy array or a list. RUL errors are in cycles.
 """
 
 import numpy as np
+import pandas as pd
 
 import config
 from contracts import check_predictions
@@ -79,6 +80,26 @@ def head_agreement(df):
         "stage_agreement": float(np.mean(df["stage_pred"].to_numpy() == implied_stage)),
         "health_gap": float(np.mean(np.abs(df["health_pred"].to_numpy() - implied_health))),
     }
+
+
+def errors_by_stage(df):
+    """RUL error broken down by true stage. bias > 0 means predictions run late (too optimistic).
+
+    Returns a DataFrame, one row per stage name: n, rmse, mae, bias.
+    """
+    rows = {}
+    for stage, name in enumerate(config.STAGE_NAMES):
+        part = df[df["stage_true"] == stage]
+        if len(part) == 0:
+            rows[name] = {"n": 0, "rmse": np.nan, "mae": np.nan, "bias": np.nan}
+            continue
+        rows[name] = {
+            "n": len(part),
+            "rmse": rmse(part["rul_true"], part["rul_pred"]),
+            "mae": mae(part["rul_true"], part["rul_pred"]),
+            "bias": float(np.mean(part["rul_pred"] - part["rul_true"])),
+        }
+    return pd.DataFrame(rows).T
 
 
 def summarize(df):

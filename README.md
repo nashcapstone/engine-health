@@ -4,6 +4,8 @@ Team Fast Code AI. A multi-output model on NASA C-MAPSS FD001 that predicts rema
 
 Who does what, and the schedule: [WORK_DIVISION.md](WORK_DIVISION.md).
 
+Branch rules and the history log: [instructions.md](instructions.md). Read it before your first commit.
+
 ## Setup
 
 ```

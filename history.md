@@ -87,3 +87,20 @@ New entries go at the bottom. Do not edit or delete someone else's entry.
 - Run `git config pull.rebase false` once in your history folder. Without it, `git pull` stops with an error when two people have logged at the same time.
 
 **Commits:** 5ea33e8
+
+## 2026-09-29 | Member A | data
+
+**Changed**
+- `data/download.py`: `download()` fetches the NASA C-MAPSS archive and extracts `train_FD001.txt`, `test_FD001.txt` and `RUL_FD001.txt` into `data/raw/`. It skips files that already exist. Run it with `python -m data.download`.
+- `data/preprocess.py`: loads raw files, computes RUL, splits 80/20 by engine (seed 42), fits min-max on the 80 training engines only, builds 30-cycle sliding windows, and labels them with `labels.py`. The test set is the last 30-cycle window per test engine, with RUL taken from `RUL_FD001.txt`. `python -m data.preprocess` writes `train.npz`, `val.npz`, `test.npz` and `scaler.json` to `artifacts/data/`. Every split passes `check_batch`, and a leakage check confirms no engine is in both train and val.
+- `data/loaders.py`: `get_dataloaders(batch_size)` returns `{"train", "val", "test"}` PyTorch DataLoaders. Only train is shuffled, and each batch is a dict of tensors in the contract 1 format.
+- `tests/test_data.py`: 11 tests. The FD001 test is skipped when `data/raw/` is empty.
+
+**Others need to know**
+- Member B: the real data is ready. Run `python -m data.preprocess` once, then use `get_dataloaders()` or `data.preprocess.load_split("train")`. Train is (14070, 30, 14) from 80 engines, val is (3661, 30, 14) from 20 engines, test is (100, 30, 14). The train+val total is 17,731 windows, as expected.
+- Stage counts (HEALTHY/WARNING/CRITICAL): train 5992/5678/2400, val 1641/1420/600, test 33/42/25. CRITICAL is about 17% of windows, so consider class weights for the stage head.
+- Train X lies in [0, 1]. Val and test can fall slightly outside it (val: -0.03 to 1.03) because the scaler is not refitted on them.
+- Test y_rul is capped at 125 like everything else. Test `cycle` is the last recorded cycle of each test engine.
+- No shared files changed. `VAL_FRACTION = 0.2` is in `data/preprocess.py`, not `config.py`.
+
+**Commits:** 11908ab

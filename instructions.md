@@ -26,7 +26,11 @@ git checkout -b models          # or: data, evaluation
 cd ..
 
 git clone -b history --single-branch https://github.com/nashcapstone/engine-health.git engine-health-history
+cd engine-health-history
+git config pull.rebase false
 ```
+
+The last line lets `git pull` combine your entry with someone else's when you both log at the same time.
 
 Optional, so the log shows who wrote what. Run in both folders:
 
@@ -68,4 +72,4 @@ git config user.name "Your name"
 **Commits:** short hashes
 ```
 
-Log every change that another member could build on or be affected by. Add new entries; do not edit or delete someone else's.
+Leave a blank line above and below your entry. Log every change that another member could build on or be affected by. Add new entries; do not edit or delete someone else's.

@@ -77,3 +77,13 @@ New entries go at the bottom. Do not edit or delete someone else's entry.
 **Others need to know**
 - This branch holds only the log and is never merged into `main`.
 - If your push here is rejected, run `git pull` and push again.
+
+## 2026-09-29 | Member B | main
+
+**Changed**
+- `instructions.md`: the history folder setup now includes `git config pull.rebase false`, and entries should have a blank line above and below.
+
+**Others need to know**
+- Run `git config pull.rebase false` once in your history folder. Without it, `git pull` stops with an error when two people have logged at the same time.
+
+**Commits:** 5ea33e8

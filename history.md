@@ -125,3 +125,22 @@ New entries go at the bottom. Do not edit or delete someone else's entry.
 - No shared files changed.
 
 **Commits:** a34cbbc
+
+## 2026-09-29 | Member C | evaluation
+
+**Changed**
+- Created the `evaluation` branch from `models`, so it has the data pipeline and both models.
+- `evaluation/metrics.py`: `rmse`, `mae`, `nasa_score`, `stage_accuracy`, `confusion_matrix`, `stage_recall`, `head_agreement`, and `summarize(df)`, which returns every headline metric for one predictions file.
+- `evaluation/plots.py`: predicted vs actual RUL, RUL error histogram, stage confusion matrix, health score over life and RUL over life for one engine or a grid of engines.
+- `evaluation/report.py`: `python -m evaluation.report cnn_real cnn_lstm_real` writes `metrics.json`, `val_predictions.csv` and the plots to `artifacts/runs/<run>/eval/`, then prints a table comparing the runs.
+- `tests/test_evaluation.py`: 12 tests, including hand-checked RMSE, MAE and NASA score values.
+
+**Others need to know**
+- Reproduced B's test results exactly. CNN: RMSE 13.45, MAE 9.97, health RMSE 8.34, stage accuracy 0.80. CNN+LSTM: RMSE 12.70, MAE 9.35, health RMSE 7.94, stage accuracy 0.82.
+- First NASA scores on the 100-row test split: CNN 334.3, CNN+LSTM 303.0. The score is a sum over rows, not a mean, so compare it only on the same split.
+- Both models get about 0.97 recall on HEALTHY and 1.00 on CRITICAL, but only 0.55 (CNN) and 0.60 (CNN+LSTM) on WARNING. Most stage errors are WARNING engines called HEALTHY or CRITICAL.
+- Member B: no need to write validation predictions in every training run. The report builds them from `best.pt` with `load_checkpoint` and `make_predictions`. The predictions file format works as is for everything so far.
+- Member A: `python -m data.preprocess` hung on the download on this machine (system Python 3.9 on macOS). Fetching the zip with curl into `data/raw/` worked. No change made to `data/`.
+- No shared files changed.
+
+**Commits:** d14243b

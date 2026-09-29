@@ -104,3 +104,24 @@ New entries go at the bottom. Do not edit or delete someone else's entry.
 - No shared files changed. `VAL_FRACTION = 0.2` is in `data/preprocess.py`, not `config.py`.
 
 **Commits:** 11908ab
+
+## 2026-09-29 | Member B | models
+
+**Changed**
+- Created the `models` branch from `main` and merged `data` into it (fast-forward), so the models train on Member A's dataloaders.
+- `models/heads.py`: `MultiHead`, the three output heads. Every model ends in it, so the contract 2 dict is built in one place.
+- `models/cnn.py`: `CNNBaseline` (stage 1). `models/cnn_lstm.py`: `CNNLSTM` (stage 2). Both return `attn = None`.
+- `models/losses.py`: `MultiTaskLoss` and `stage_class_weights`.
+- `models/train.py`: `train`, `evaluate`, `predict`, `make_predictions`, `write_predictions`, `save_checkpoint`, `load_checkpoint`. Run with `python -m models.train --model cnn --data real`.
+- `models/__init__.py`: `build_model(name)` with names `cnn` and `cnn_lstm`.
+- `tests/test_models.py`: 10 tests. Both models pass the three checks: contract 2 output, finite loss and gradients, overfitting one batch of 32.
+
+**Others need to know**
+- First results on real FD001, 30 epochs, untuned. CNN: val RMSE 13.30, test RMSE 13.45, test stage accuracy 0.80. CNN+LSTM: val RMSE 13.34, test RMSE 12.70, test stage accuracy 0.82. The test set is 100 windows, so the gap between the two is within noise.
+- Member C: each run writes `best.pt`, `history.csv` and `predictions.csv` to `artifacts/runs/<model>_<data>/`. The predictions are for the test split and pass `check_predictions`. `attn.npy` is written only for models with attention, so neither of these runs has one. `rul_pred` is clipped to [0, 125] and `health_pred` to [0, 100]. `stage_pred` comes from the stage head, not from `rul_pred`, so the two can disagree.
+- Member C: `models.train.load_checkpoint(path)` returns the model ready for inference, and `make_predictions(model, batch)` returns the DataFrame and attention for any contract 1 dict.
+- Loss: both regression targets are scaled to 0-1 inside the loss, weights are rul 1.0, health 1.0, stage 0.1, and the stage head uses inverse-frequency class weights. These are first guesses, not tuned.
+- Member A: no changes to your files. `models/train.py` imports `EngineWindows` from `data/loaders.py` and `load_split` from `data/preprocess.py`.
+- No shared files changed.
+
+**Commits:** a34cbbc

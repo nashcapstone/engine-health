@@ -272,3 +272,41 @@ def test_early_warning_on_fake_data():
     table = early_warning_table(att_curve, drift)
     assert table["signal_onset_rul"].notna().sum() >= config.N_SENSORS // 2
     plot_early_warning(att_curve, drift, table)
+
+
+def test_format_card_matches_the_spec():
+    from evaluation.card import format_card
+
+    result = {
+        "engine_id": 42, "cycle": 150, "health": 68.2, "stage_name": "WARNING", "rul": 38.4,
+        "top_sensors": [("s14", 0.18), ("s11", 0.11)],
+    }
+    card = format_card(result, true_rul=40)
+    for text in ("Engine 42 - Cycle 150", "Health Score   68 / 100", "Stage          WARNING",
+                 "Estimated RUL  38 cycles", "Actual RUL     40 cycles", "s14 (2.5x)"):
+        assert text in card, f"{text!r} missing from the card"
+    widths = {len(line) for line in card.splitlines()}
+    assert len(widths) == 1, "card lines should all be the same width"
+    assert "Watching" not in format_card({**result, "top_sensors": []})
+
+
+def test_fleet_table_sorts_most_urgent_first():
+    import pandas as pd
+
+    from data.preprocess import MinMaxScaler
+    from evaluation.card import fleet_table
+    from models.inference import Predictor
+
+    rng = np.random.default_rng(0)
+    parts = []
+    for eid, n in ((1, 40), (2, 35), (3, 50)):
+        part = pd.DataFrame(rng.uniform(0, 1, (n, len(config.RAW_COLUMNS))), columns=list(config.RAW_COLUMNS))
+        part["engine_id"], part["cycle"] = eid, np.arange(1, n + 1)
+        parts.append(part)
+    scaler = MinMaxScaler()
+    scaler.min_, scaler.max_ = np.zeros(config.N_SENSORS), np.ones(config.N_SENSORS)
+    table = fleet_table(Predictor(_tiny_attention_model(), scaler), pd.concat(parts), pd.Series({1: 5, 2: 200, 3: 50}))
+    assert sorted(table["engine_id"]) == [1, 2, 3]
+    assert table["rul_pred"].is_monotonic_increasing
+    assert table.set_index("engine_id").loc[2, "rul_true"] == config.RUL_CAP
+    assert table.set_index("engine_id").loc[3, "cycle"] == 50

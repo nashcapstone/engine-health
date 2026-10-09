@@ -115,9 +115,10 @@ def plot_attention_over_life(df, attn, engine_id, ax=None, title=None):
     per_row = sensor_attention(attn[mask][order])
     if ax is None:
         _, ax = plt.subplots(figsize=(7, 6))
+    im = _heatmap(ax, per_row, list(config.SENSORS), [str(c) for c in cycles])
+    # One tick per row is unreadable for a long engine: keep about 10
     step = max(1, len(cycles) // 10)
-    ylabels = [str(c) if i % step == 0 else "" for i, c in enumerate(cycles)]
-    im = _heatmap(ax, per_row, list(config.SENSORS), ylabels)
+    ax.set_yticks(range(0, len(cycles), step), [str(c) for c in cycles[::step]], fontsize=8)
     ax.set_xlabel("Sensor")
     ax.set_ylabel("Cycle")
     ax.set_title(title or f"Engine {engine_id}: attention over life")

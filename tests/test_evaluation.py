@@ -339,7 +339,7 @@ def test_results_aggregate_over_seeds(tmp_path):
     cnn = per_run[(per_run["split"] == "val") & (per_run["variant"] == "cnn")]
     assert table.loc[("val", "cnn"), ("rul_rmse", "mean")] == pytest.approx(cnn["rul_rmse"].mean())
     assert table.loc[("val", "cnn"), ("rul_rmse", "std")] == pytest.approx(cnn["rul_rmse"].std())
-    assert int(table.loc[("val", "cnn"), "n_seeds"].iloc[0]) == 2
+    assert int(np.ravel(table.loc[("val", "cnn"), "n_seeds"])[0]) == 2
 
     stability = attention_stability(attn_seeds)
     assert -1 <= stability["attention"] <= 1

@@ -144,3 +144,67 @@ def test_ablation_variants_build_and_run(tmp_path, monkeypatch):
     mtime = os.path.getmtime(os.path.join(out_dir, "best.pt"))
     ablation.run_variant("attention_no_stage", 0, data, epochs=1)
     assert os.path.getmtime(os.path.join(out_dir, "best.pt")) == mtime
+
+
+def _raw_engine_rows(n_cycles, engine_id=7, seed=0):
+    import pandas as pd
+
+    rng = np.random.default_rng(seed)
+    rows = pd.DataFrame(rng.uniform(0, 1, (n_cycles, len(config.RAW_COLUMNS))), columns=list(config.RAW_COLUMNS))
+    rows["engine_id"] = engine_id
+    rows["cycle"] = np.arange(1, n_cycles + 1)
+    return rows
+
+
+def _identity_scaler():
+    from data.preprocess import MinMaxScaler
+
+    scaler = MinMaxScaler()
+    scaler.min_ = np.zeros(config.N_SENSORS)
+    scaler.max_ = np.ones(config.N_SENSORS)
+    return scaler
+
+
+def test_window_from_rows_ends_at_cycle_and_pads():
+    from models.inference import window_from_rows
+
+    rows = _raw_engine_rows(50)
+    window = window_from_rows(rows, _identity_scaler(), cycle=40)
+    expected = rows[list(config.SENSORS)].to_numpy(dtype=np.float32)[10:40]
+    assert window.shape == (config.WINDOW, config.N_SENSORS)
+    assert np.allclose(window, expected)
+
+    short = window_from_rows(_raw_engine_rows(12), _identity_scaler())
+    assert short.shape == (config.WINDOW, config.N_SENSORS)
+    assert np.allclose(short[: config.WINDOW - 12], short[0])
+    with pytest.raises(AssertionError, match="no cycle"):
+        window_from_rows(rows, _identity_scaler(), cycle=99)
+
+
+def test_predictor_matches_make_predictions(tmp_path):
+    from models.inference import Predictor, window_from_rows
+
+    torch.manual_seed(0)
+    model = build_model("attention").eval()
+    predictor = Predictor(model, _identity_scaler(), "attention")
+    rows = _raw_engine_rows(60)
+    result = predictor.predict(rows, cycle=45)
+    assert result["engine_id"] == 7 and result["cycle"] == 45
+    assert 0 <= result["rul"] <= config.RUL_CAP and 0 <= result["health"] <= 100
+    assert result["stage_name"] == config.STAGE_NAMES[result["stage"]]
+    assert sum(result["stage_probs"]) == pytest.approx(1.0)
+    assert len(result["top_sensors"]) == 3
+    weights = [w for _, w in result["top_sensors"]]
+    assert weights == sorted(weights, reverse=True)
+
+    x = window_from_rows(rows, _identity_scaler(), cycle=45)
+    batch = {
+        "X": x[None],
+        "y_rul": np.zeros(1, dtype=np.float32),
+        "y_health": np.zeros(1, dtype=np.float32),
+        "y_stage": np.zeros(1, dtype=np.int64),
+        "engine_id": np.array([7]),
+        "cycle": np.array([45]),
+    }
+    df, _ = make_predictions(model, batch)
+    assert result["rul"] == pytest.approx(float(df["rul_pred"].iloc[0]), abs=1e-4)

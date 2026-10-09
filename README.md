@@ -17,13 +17,30 @@ pytest
 
 Run everything from the repo root.
 
+## Run the whole project
+
+```
+python -m data.preprocess                                   # download FD001, build train/val/test
+python -m models.train --model attention --data real        # also: cnn, cnn_lstm
+python -m evaluation.report cnn_real cnn_lstm_real attention_real
+python -m evaluation.sensor_failure attention_real
+python -m evaluation.early_warning attention_real
+python -m evaluation.card --engine 42 --cycle 150           # or --fleet
+python -m models.ablation                                   # 7 variants x 3 seeds, about 25 min on CPU
+python -m evaluation.results
+```
+
+Each training run writes to `artifacts/runs/<model>_real/`, and the evaluation commands write plots and tables to its `eval/` folder. The ablation sweep and its results table go to `artifacts/runs/ablation/`. Findings are in [REPORT.md](REPORT.md).
+
+If the download hangs, fetch the [NASA archive](https://phm-datasets.s3.amazonaws.com/NASA/6.+Turbofan+Engine+Degradation+Simulation+Data+Set.zip) with curl and put `train_FD001.txt`, `test_FD001.txt` and `RUL_FD001.txt` from the inner `CMAPSSData.zip` into `data/raw/`.
+
 ## Layout
 
 | Path | Owner | Contents |
 |---|---|---|
 | `data/` | Member A | Download, preprocessing, windowing, labels, splits |
-| `models/` | Member B | The three model stages, training loop |
-| `evaluation/` | Member C | Metrics, plots, attention analysis |
+| `models/` | Member B | The three model stages, training loop, ablation sweep, inference on raw readings |
+| `evaluation/` | Member C | Metrics, plots, attention analysis, sensor failure demo, early warning, output card, results table |
 | `config.py` | Shared | Constants: window, RUL cap, thresholds, sensor list |
 | `labels.py` | Shared | Health score and health stage, derived from RUL |
 | `contracts.py` | Shared | Validators for the three interfaces |

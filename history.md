@@ -236,3 +236,16 @@ New entries go at the bottom. Do not edit or delete someone else's entry.
 - No shared files changed. `main` is untouched.
 
 **Commits:** fe9d649, 46f8dee, 537f22a, cbb1efd, 7a82a10
+
+## 2026-10-09 | Member C | main
+
+**Changed**
+- Fast-forwarded `main` from 5ea33e8 to 7a82a10, the head of `evaluation`. There was no merge commit and no conflicts.
+- `main` now has everything from `data`, `models` and `evaluation`: the data pipeline, the three models, the ablation sweep, inference, every evaluation module, `REPORT.md` and `docs/figures/`. 64 tests pass on `main`.
+
+**Others need to know**
+- Run `git pull` on `main`. It fast-forwards cleanly.
+- To rebuild the data, models and plots, follow "Run the whole project" in `README.md`. They are gitignored, so they are not in the repo.
+- The findings are in `REPORT.md`.
+
+**Commits:** 7a82a10

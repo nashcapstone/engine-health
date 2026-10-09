@@ -202,3 +202,37 @@ New entries go at the bottom. Do not edit or delete someone else's entry.
 - No shared files changed.
 
 **Commits:** 454927c, 89b6802
+
+## 2026-10-09 | Member C | models
+
+**Changed**
+- `models/ablation.py`: 7 variants × 3 seeds: cnn, cnn_lstm, attention, and attention without the ×14 scale, without the stage loss, without the health loss, and with stage weight 0.5. Each run writes test and validation predictions to `artifacts/runs/ablation/<variant>_s<seed>/`, and finished runs are skipped, so an interrupted sweep resumes. Run it with `python -m models.ablation` (about 25 min on CPU).
+- `models/inference.py`: `Predictor.load(run_dir)` loads `best.pt` and the training scaler. `predict(rows, cycle)` scales one engine's raw rows, takes the last 30 cycles up to that cycle (padding short engines as preprocessing does), and returns RUL, health, stage, stage probabilities and the top attention sensors.
+- `tests/test_models.py`: tests for both. 38 tests pass on `models`, plus 1 skipped without raw data.
+
+**Others need to know**
+- Inference on raw rows matches `make_predictions` on the test windows exactly.
+- No shared files changed.
+
+**Commits:** cb6a27a, e8946d3
+
+## 2026-10-09 | Member C | evaluation
+
+**Changed**
+- Merged `models` into `evaluation` twice (d22a4f0, 3104f6d) to bring in the ablation sweep and the inference code.
+- `evaluation/sensor_failure.py`: breaks one sensor at a time (stuck, noise, dead), measures the change in predicted RUL, and compares it with attention. `python -m evaluation.sensor_failure <run>`.
+- `evaluation/early_warning.py`: attention and raw signal drift per sensor in bins of true RUL, and the onset of each. `python -m evaluation.early_warning <run>`.
+- `evaluation/card.py`: the output card, and a fleet view of every test engine with the most urgent first. `python -m evaluation.card --engine 42 --cycle 150`, or `--fleet`.
+- `evaluation/results.py`: mean ± std over seeds per variant, plus attention stability across seeds. `python -m evaluation.results`.
+- `REPORT.md` and `docs/figures/`: the project write-up with 7 figures. `README.md`: commands to run the whole project.
+- 64 tests pass on `evaluation`.
+
+**Others need to know**
+- Ablation, validation RUL RMSE over 3 seeds: CNN 13.23 ± 0.14, CNN+LSTM 13.14 ± 0.04, attention 13.02 ± 0.12. Attention is best on average but within about one std, so we do not claim an accuracy gain. Its value is explainability.
+- Without the stage loss, RUL is as good, and reading the stage off the predicted RUL is as accurate as the stage head (0.851 vs 0.848). The health head is redundant with RUL, as expected.
+- The attention ranking is not stable across seeds (Spearman 0.55), while the ranking from breaking sensors is (0.75 to 0.91). The sensors that matter in every seed are s9, s13, s11, s14 and s8. s11 is the clearest early warning sensor.
+- The model does not reduce its attention on a broken sensor, so attention does not double as fault detection.
+- `docs/figures/` holds PNGs only. No data, arrays or checkpoints are in git.
+- No shared files changed. `main` is untouched.
+
+**Commits:** fe9d649, 46f8dee, 537f22a, cbb1efd, 7a82a10

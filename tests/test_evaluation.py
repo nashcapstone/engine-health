@@ -310,3 +310,41 @@ def test_fleet_table_sorts_most_urgent_first():
     assert table["rul_pred"].is_monotonic_increasing
     assert table.set_index("engine_id").loc[2, "rul_true"] == config.RUL_CAP
     assert table.set_index("engine_id").loc[3, "cycle"] == 50
+
+
+def _fake_ablation_dir(tmp_path):
+    for variant in ("cnn", "attention"):
+        for seed in (0, 1):
+            run = tmp_path / f"{variant}_s{seed}"
+            run.mkdir()
+            df, attn = fake_predictions(seed=seed)
+            df.to_csv(run / "predictions.csv", index=False)
+            df.to_csv(run / "val_predictions.csv", index=False)
+            if variant == "attention":
+                np.save(run / "val_attn.npy", attn)
+    (tmp_path / "unfinished_s0").mkdir()
+    return tmp_path
+
+
+def test_results_aggregate_over_seeds(tmp_path):
+    from evaluation.results import METRICS, aggregate, attention_stability, collect, find_runs, to_markdown
+
+    runs = find_runs(str(_fake_ablation_dir(tmp_path)))
+    assert set(runs) == {("cnn", 0), ("cnn", 1), ("attention", 0), ("attention", 1)}
+    per_run, attn_seeds = collect(runs)
+    assert len(per_run) == 8  # 4 runs x 2 splits
+    assert set(attn_seeds["variant"]) == {"attention"} and len(attn_seeds) == 2
+
+    table = aggregate(per_run, order=["cnn", "attention"])
+    cnn = per_run[(per_run["split"] == "val") & (per_run["variant"] == "cnn")]
+    assert table.loc[("val", "cnn"), ("rul_rmse", "mean")] == pytest.approx(cnn["rul_rmse"].mean())
+    assert table.loc[("val", "cnn"), ("rul_rmse", "std")] == pytest.approx(cnn["rul_rmse"].std())
+    assert int(table.loc[("val", "cnn"), "n_seeds"].iloc[0]) == 2
+
+    stability = attention_stability(attn_seeds)
+    assert -1 <= stability["attention"] <= 1
+    assert attention_stability(attn_seeds.iloc[0:0]) == {}
+
+    md = to_markdown(table, "val")
+    assert md.count("\n") == 3 and all(m in md for m in METRICS)
+    assert md.count("**") >= 2 * len(METRICS) - 2

@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 import torch
@@ -120,3 +122,25 @@ def test_attention_run_writes_attn_file(tmp_path):
     saved = np.load(tmp_path / "attn.npy")
     check_predictions(df, saved)
     assert np.allclose(saved, attn)
+
+
+def test_ablation_variants_build_and_run(tmp_path, monkeypatch):
+    import pandas as pd
+
+    from models import ablation
+
+    monkeypatch.setattr(ablation, "ABLATION_DIR", str(tmp_path))
+    for name, (model_name, model_kwargs, _) in ablation.VARIANTS.items():
+        assert model_name in MODELS, f"{name} uses unknown model {model_name}"
+        build_model(model_name, **model_kwargs)
+
+    train_batch, val_batch = split_by_engine(fake_dataset(n_engines=6))
+    data = {"train": train_batch, "val": val_batch, "test": val_batch}
+    out_dir = ablation.run_variant("attention_no_stage", 0, data, epochs=1)
+    for name in ("best.pt", "predictions.csv", "attn.npy", "val_predictions.csv", "val_attn.npy"):
+        assert os.path.exists(os.path.join(out_dir, name)), f"{name} was not written"
+    check_predictions(pd.read_csv(os.path.join(out_dir, "val_predictions.csv")))
+    # a finished run is skipped, not retrained
+    mtime = os.path.getmtime(os.path.join(out_dir, "best.pt"))
+    ablation.run_variant("attention_no_stage", 0, data, epochs=1)
+    assert os.path.getmtime(os.path.join(out_dir, "best.pt")) == mtime

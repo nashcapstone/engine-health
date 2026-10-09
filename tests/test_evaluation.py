@@ -195,3 +195,80 @@ def test_attention_rejects_mismatched_rows():
     df, attn = fake_predictions()
     with pytest.raises(AssertionError, match="attn has shape"):
         attention.attention_by_stage(df, attn[:-1])
+
+
+def _tiny_attention_model():
+    import torch
+
+    from models import build_model
+
+    torch.manual_seed(0)
+    return build_model("attention").eval()
+
+
+def test_corrupt_modes_break_only_one_sensor():
+    from evaluation.sensor_failure import corrupt
+    from fakes import fake_dataset
+
+    batch = fake_dataset(n_engines=2)
+    j = 3
+    sensor = config.SENSORS[j]
+    others = [k for k in range(config.N_SENSORS) if k != j]
+    for mode in ("stuck", "noise", "dead"):
+        broken = corrupt(batch, sensor, mode)
+        assert np.array_equal(broken["X"][:, :, others], batch["X"][:, :, others]), f"{mode} touched other sensors"
+        assert not np.array_equal(broken["X"][:, :, j], batch["X"][:, :, j])
+        assert broken["X"].dtype == np.float32
+    stuck = corrupt(batch, sensor, "stuck")["X"][:, :, j]
+    assert np.allclose(stuck, stuck[:, :1])
+    assert (corrupt(batch, sensor, "dead")["X"][:, :, j] == 0).all()
+    assert batch["X"][:, :, j].std() > 0, "corrupt must not change the input batch"
+    with pytest.raises(ValueError, match="unknown mode"):
+        corrupt(batch, sensor, "melted")
+
+
+def test_failure_table_and_plot():
+    from evaluation.sensor_failure import failure_table, plot_failure, rank_agreement
+    from fakes import fake_dataset
+
+    batch = fake_dataset(n_engines=2)
+    table = failure_table(_tiny_attention_model(), batch, modes=("noise", "dead"))
+    assert len(table) == 2 * config.N_SENSORS
+    assert (table["mean_abs_change"] >= 0).all()
+    assert table["attention"].between(0, 1).all()
+    assert set(rank_agreement(table)) == {"noise", "dead"}
+    plot_failure(table)
+
+
+def test_onset_walks_up_from_failure():
+    import pandas as pd
+
+    from evaluation.early_warning import onset
+
+    curve = pd.DataFrame({"a": [1, 1, 5, 5, 5], "b": [5, 1, 5, 5, 5], "c": [1, 1, 1, 1, 1]}, index=[40, 30, 20, 10, 0])
+    result = onset(curve, lambda c: c > 2)
+    assert result["a"] == 20  # above from RUL 20 down to 0
+    assert result["b"] == 20  # the blip at 40 does not count, 30 breaks the run
+    assert np.isnan(result["c"])
+
+
+def test_early_warning_on_fake_data():
+    from evaluation.early_warning import (
+        attention_by_rul,
+        early_warning_table,
+        plot_early_warning,
+        signal_drift_by_rul,
+    )
+    from fakes import fake_dataset
+    from models.train import make_predictions
+
+    batch = fake_dataset(n_engines=4)
+    df, attn = make_predictions(_tiny_attention_model(), batch)
+    att_curve = attention_by_rul(df, attn)
+    assert np.allclose(att_curve.sum(axis=1), 1.0, atol=1e-4)
+    drift = signal_drift_by_rul(batch)
+    assert list(drift.columns) == list(config.SENSORS)
+    # fake sensors drift with wear, so most should show a signal onset
+    table = early_warning_table(att_curve, drift)
+    assert table["signal_onset_rul"].notna().sum() >= config.N_SENSORS // 2
+    plot_early_warning(att_curve, drift, table)

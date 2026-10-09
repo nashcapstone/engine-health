@@ -165,3 +165,40 @@ New entries go at the bottom. Do not edit or delete someone else's entry.
 - No shared files changed.
 
 **Commits:** 99af80b
+
+## 2026-10-09 | Member C | models
+
+**Changed**
+- Member C is now finishing the whole project alone. Each part still goes on its own branch: model work on `models`, evaluation on `evaluation`.
+- `models/attention.py`: stage 3. `SensorAttention` scores the 14 sensors at each timestep (a conv over time, then a softmax over sensors). `AttentionCNNLSTM` multiplies the input by the weights times 14, so uniform attention leaves the input unchanged, then runs the CNN+LSTM and the three heads. `attn` in the output is the weights that sum to 1.
+- `models/__init__.py`: registered the model as `attention`. Train it with `python -m models.train --model attention --data real`.
+- `tests/test_models.py`: 3 attention tests: weights sum to 1, uniform weights leave the input unchanged, and a run writes `attn.npy`. The overfit test now checks the best loss reached, not the last step. The attention model reached 0.0019 by step 400, but a brief Adam spike put step 600 at 0.022.
+- 36 tests pass on `models`.
+
+**Others need to know**
+- First attention run, 30 epochs, untuned, one seed:
+
+  | Model | Val RMSE | Test RMSE | Test NASA | Test stage acc |
+  |---|---|---|---|---|
+  | CNN | 13.30 | 13.45 | 334 | 0.80 |
+  | CNN+LSTM | 13.34 | 12.70 | 303 | 0.82 |
+  | Attention | 12.99 | 12.88 | 302 | 0.81 |
+
+  The gaps are within noise. Whether attention really helps is for the ablation runs with several seeds.
+- No shared files changed.
+
+**Commits:** ee7426e
+
+## 2026-10-09 | Member C | evaluation
+
+**Changed**
+- Merged `models` into `evaluation`, so the evaluation code can load the attention model.
+- `evaluation/attention.py`: the attention-over-life plot keeps about 10 cycle ticks.
+- 54 tests pass on `evaluation`.
+
+**Others need to know**
+- Attention on the validation split: s14 (corrected core speed) gets the most attention in every stage (about 0.19 against a uniform 0.071). s11 (static pressure at the HPC outlet) rises toward failure: 0.099 HEALTHY, 0.113 WARNING, 0.135 CRITICAL. s15 (bypass ratio) is mostly ignored (0.013 to 0.018).
+- The project-context hypothesis that s2 and s7 warn early is not supported so far, since both stay below uniform.
+- No shared files changed.
+
+**Commits:** 454927c, 89b6802
